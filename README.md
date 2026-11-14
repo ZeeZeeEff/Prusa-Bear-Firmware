@@ -4,7 +4,7 @@ Three MK3S/Einsy 1.0a build variants based on Prusa firmware 3.14.1.
 
 ## Status
 
-Source changes are published on the bear-3.14.1 branch. Compilation and physical printer validation are pending.
+All three variants compiled successfully in English and multilingual configurations on 14 November 2026. Physical printer validation is pending.
 The local environment cannot resolve github.com. Sources were retrieved and published through the GitHub connector. The included Actions workflow provides the build environment.
 Check the workflow result before using any generated firmware.
 
@@ -83,17 +83,14 @@ The original startup splash and numeric Prusa build version are retained. The va
 
 Use a Linux x86-64 environment with Git, Python 3.12, CMake, Ninja and gettext. Prusa bootstrap downloads AVR GCC 7.3.0 and prusa3dboards 1.0.6.
 
-For the initial source installation, clone the fork, fetch the release from upstream and create the branch.
+To build the published source, clone the firmware branch.
 
 ```bash
-git clone https://github.com/ZeeZeeEff/Prusa-Bear-Firmware.git
+git clone --branch bear-3.14.1 https://github.com/ZeeZeeEff/Prusa-Bear-Firmware.git
 cd Prusa-Bear-Firmware
-git remote add upstream https://github.com/prusa3d/Prusa-Firmware.git
-git fetch upstream tag v3.14.1
-git switch -c bear-3.14.1 74a577bc0e5902767b072ee85f499dc1361bf6ba
 ```
 
-Copy the prepared directory contents over that checkout, including .github. Retain the upstream LICENSE and the rest of the source tree. Review with `git diff`, then commit and push the new branch.
+The branch already includes the three configurations, runtime adaptations and build workflow. Its parent is the exact Prusa 3.14.1 release commit.
 
 ```bash
 python3 -m venv .venv
@@ -130,7 +127,16 @@ For V2, use the Bear Lab slicer changes, including 0.4 mm starting retraction an
 - Compared V1 calibration changes with the reference commit.
 - Compared the V2 variant with the referenced release.
 - Checked that each targeted runtime replacement matches exactly once.
-- AVR compilation, language compilation, firmware size reports and physical printer tests are pending.
+- All six firmware targets passed AVR compilation and linking, including multilingual catalog generation and the build's flash-size checks.
+- English builds use 230756 program bytes / 5665 static data bytes for stock and V1, and 217874 / 5462 bytes for V2.
+- V2 emits unused-function warnings for the disabled fan-check code.
+- Physical printer tests are pending.
+
+[Successful build of commit e1bd715](https://github.com/ZeeZeeEff/Prusa-Bear-Firmware/actions/runs/43598836992)
+[Download firmware artifact](https://github.com/ZeeZeeEff/Prusa-Bear-Firmware/actions/runs/43598836992/artifacts/14115214771)
+
+The ZIP includes versioned English and multilingual HEX files and additional multilingual filename aliases. Select the filename containing your exact variant and language mode. The artifact ZIP SHA-256 reported by GitHub is `5a154551615f25cfc49eb0102216c0f9094b93d448d3b99f38632114416e0549`. GitHub Actions artifacts have limited retention.
+
 
 ## License
 
