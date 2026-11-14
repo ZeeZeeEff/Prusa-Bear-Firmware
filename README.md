@@ -8,6 +8,18 @@ All three variants compiled successfully in English and multilingual configurati
 The local environment cannot resolve github.com. Sources were retrieved and published through the GitHub connector. The included Actions workflow provides the build environment.
 Check the workflow result before using any generated firmware.
 
+## Firmware ZIP downloads
+
+Each hardware ZIP contains English and multilingual HEX firmware, the README, license and a build manifest identifying the source commit.
+
+- [Original Prusa extruder](firmware-zips/Prusa-Bear-3.14.1-STOCK.zip)
+- [BearExxa V1](firmware-zips/Prusa-Bear-3.14.1-EXXA_V1.zip)
+- [BearExxa V2 beta.6 hardware](firmware-zips/Prusa-Bear-3.14.1-EXXA_V2.zip)
+- [Full firmware source](firmware-zips/Prusa-Bear-3.14.1-source.zip)
+- [SHA-256 checksums](firmware-zips/SHA256SUMS)
+
+All six builds and ZIP publication passed in [build 43599315541](https://github.com/ZeeZeeEff/Prusa-Bear-Firmware/actions/runs/43599315541). Physical hardware testing is pending. These ZIPs are committed to this branch and are independent of Actions artifact retention. The source archive excludes previously generated ZIPs.
+
 ## Compatibility
 
 | CMake variant | Hardware |
