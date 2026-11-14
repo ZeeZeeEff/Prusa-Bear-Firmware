@@ -1,0 +1,135 @@
+name: Publish Bear 3.14.1 release
+on:
+  push:
+    branches: [bear-3.14.1]
+    paths: [.github/workflows/bear-release.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish-bear-3.14.1-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 829b705ad467f65781b5cdc4f9469fb97dffbe27
+      - name: Verify existing release assets
+        working-directory: firmware-zips
+        run: |
+          sha256sum --check SHA256SUMS
+          python3 - <<'PY'
+          import json, zipfile
+          from pathlib import Path
+          for variant in ("STOCK", "EXXA_V1", "EXXA_V2"):
+              with zipfile.ZipFile(f"Prusa-Bear-3.14.1-{variant}.zip") as z:
+                  assert z.testzip() is None
+                  for language in ("ENGLISH", "MULTILANG"):
+                      data = z.read(f"MK3S_BEAR_{variant}_{language}.hex")
+                      assert data.startswith(b":") and len(data) > 100000
+                  manifest = json.loads(z.read("BUILD.json"))
+                  assert manifest["variant"] == f"MK3S_BEAR_{variant}"
+                  assert manifest["hardware_tested"] is False
+                  assert len(manifest["source_commit"]) == 40
+                  print(variant, manifest)
+          with zipfile.ZipFile("Prusa-Bear-3.14.1-source.zip") as z:
+              assert z.testzip() is None
+              source_commit = z.read("Prusa-Bear-Firmware/SOURCE_COMMIT.txt").decode().strip()
+              assert len(source_commit) == 40
+              print("Source archive:", source_commit)
+          PY
+      - name: Write release notes
+        run: |
+          cat > /tmp/bear-release-notes.md <<'RELEASE_NOTES'
+          ## Which firmware should I use?
+          
+          **For an original, unmodified Prusa MK3S, choose STOCK.** STOCK also matches a standard-height Bear frame conversion retaining the original MK3S extruder, X-axis assembly and E3D V6 hotend.
+          
+          STOCK, V1 and V2 identify **different hardware configurations**, not successive firmware upgrades. All use Prusa firmware 3.14.1. These community builds target MK3S / Einsy 1.0a hardware; they are not official Prusa release binaries.
+          
+          | Download | Use with | Main differences from stock |
+          | --- | --- | --- |
+          | [STOCK ZIP](https://github.com/ZeeZeeEff/Prusa-Bear-Firmware/releases/download/v3.14.1-bear.1/Prusa-Bear-3.14.1-STOCK.zip) | Original MK3S hardware, or a standard-height Bear frame with the original MK3S extruder/X axis and E3D V6 | Includes upstream MK3S configuration; Bear-specific runtime changes are inactive. Z maximum: 210 mm. |
+          | [BearExxa V1 ZIP](https://github.com/ZeeZeeEff/Prusa-Bear-Firmware/releases/download/v3.14.1-bear.1/Prusa-Bear-3.14.1-EXXA_V1.zip) | Standard-height Bear frame with BearExxa V1 extruder/X-axis hardware and E3D V6 | Adapts automatic and manual Z calibration to V1 geometry. Z maximum stays 210 mm; stock heater/fan protection configuration is inherited. |
+          | [BearExxa V2 ZIP — experimental](https://github.com/ZeeZeeEff/Prusa-Bear-Firmware/releases/download/v3.14.1-bear.1/Prusa-Bear-3.14.1-EXXA_V2.zip) | BearExxa V2 hardware 2.0.0-beta.6 with Revo Micro and its specified geared extruder motor | Changes motor, extrusion, hotend, motion and calibration settings. Z maximum: 207 mm. Several monitoring features are disabled; see below. |
+          
+          **A Bear frame alone does not require V1 or V2. A Revo hotend alone does not establish V2 compatibility.** Extended-Z frames, other extruders, other hotends and other printer models need their own verified configuration.
+          
+          ## Downloads and language options
+          
+          Each hardware ZIP contains two ready-to-flash HEX files:
+          - `MK3S_BEAR_<variant>_ENGLISH.hex`: English-only firmware.
+          - `MK3S_BEAR_<variant>_MULTILANG.hex`: multilingual firmware.
+          
+          Both have the same hardware configuration. Extract the ZIP and flash **one** matching HEX, not the ZIP itself.
+          
+          Additional assets:
+          - [Full firmware source ZIP](https://github.com/ZeeZeeEff/Prusa-Bear-Firmware/releases/download/v3.14.1-bear.1/Prusa-Bear-3.14.1-source.zip): source for the packaged builds; not flashable firmware.
+          - [SHA256SUMS](https://github.com/ZeeZeeEff/Prusa-Bear-Firmware/releases/download/v3.14.1-bear.1/SHA256SUMS): checksums for all four ZIPs.
+          - [Detailed source-change audit](https://github.com/ZeeZeeEff/Prusa-Bear-Firmware/blob/829b705ad467f65781b5cdc4f9469fb97dffbe27/README.md#exact-firmware-code-changes): exact code diffs and validation limits.
+          
+          GitHub also generates “Source code” archives for the release tag. The explicitly named firmware ZIPs contain the flashable HEX files.
+          
+          ## Differences in detail
+          
+          | Setting / behavior | STOCK | BearExxa V1 | BearExxa V2 |
+          | --- | --- | --- | --- |
+          | Hotend configuration | E3D V6 | E3D V6 | Revo Micro |
+          | Z maximum | 210 mm | 210 mm | 207 mm |
+          | Automatic Z-calibration correction | 9 mm | 2 mm | 3 mm |
+          | Manual end-stop calibration position | Z_MAX_POS + 4 | Z_MAX_POS - 3 | Stock code path |
+          | E steps/mm | 280 | 280 | 415 |
+          | E microsteps | 32 | 32 | 16 |
+          | E holding/running current register | 30 | 30 | 21 |
+          | Normal X/Y maximum feedrate | 200 mm/s | 200 mm/s | 300 mm/s |
+          | Model-based temperature monitoring | Enabled | Enabled | Disabled |
+          | Fan tachometer checking | Enabled | Enabled | Disabled |
+          | Crash detection initial EEPROM default | Stock behavior | Stock behavior | Off |
+          
+          V2 also changes hotend PID and extruder homing current, disables alternative-fan detection and hides fan-check/extruder-info menus. Its two-wire hotend fan uses full-speed cooling above the configured threshold. Traditional thermal-runaway checks and temperature limits remain configured.
+          
+          Existing EEPROM settings and slicer start G-code can override relevant defaults. In particular, V2's crash-detection default only applies when the EEPROM setting is first initialized.
+          
+          ## Installation
+          
+          1. Confirm the exact printer, extruder/X-axis assembly and hotend; select the corresponding ZIP.
+          2. Record current calibration and EEPROM settings.
+          3. Extract the ZIP and use PrusaSlicer's firmware flashing tool to flash the matching ENGLISH or MULTILANG HEX.
+          4. Verify the printer configuration and perform the calibration and checks appropriate to your hardware before printing.
+          
+          For a V2 hardware conversion, follow the [Bear Lab setup and validation procedure](https://github.com/bear-lab-3d/BearExxaV2-Prusa-Firmware/blob/3.14.1-BEX201B1/README.md). It calls for an All Data factory reset (which clears calibration), the wizard and recalibration. It also specifies slicer changes including a 0.4 mm starting retraction and removal of stock M907 extruder-current commands from start G-code. These V2-specific steps are not general STOCK installation instructions.
+          
+          ## Build provenance and validation status
+          
+          All six firmware/language targets passed compilation, linking and language checks in the [packaging build](https://github.com/ZeeZeeEff/Prusa-Bear-Firmware/actions/runs/43599315541). The release workflow verifies ZIP checksums, archive integrity, expected HEX files and build manifests before publishing.
+          
+          These assets are the existing packaged builds from the repository snapshot `829b705ad467f65781b5cdc4f9469fb97dffbe27`; this release does not alter firmware code. Each hardware ZIP's `BUILD.json` identifies its actual build source commit. The source ZIP contains `SOURCE_COMMIT.txt`. Bundled READMEs predate the later detailed audit linked above.
+          
+          **Physical printer validation is pending.** Compilation does not establish hardware safety, and a small code diff alone cannot guarantee it. V2 remains experimental and removes model-based temperature monitoring and fan tachometer diagnostics. This release is therefore marked as a prerelease.
+          
+          RELEASE_NOTES
+      - name: Create draft and upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag='v3.14.1-bear.1'
+          if gh release view "$tag" --json isDraft > /tmp/bear-release-state.json 2>/dev/null; then
+            python3 -c 'import json; assert json.load(open("/tmp/bear-release-state.json"))["isDraft"], "Release already published; refusing to overwrite"'
+          else
+            gh release create "$tag" --target 829b705ad467f65781b5cdc4f9469fb97dffbe27 --draft --prerelease --title 'Prusa MK3S / Bear 3.14.1 — STOCK, BearExxa V1 & V2' --notes-file /tmp/bear-release-notes.md
+          fi
+          gh release edit "$tag" --notes-file /tmp/bear-release-notes.md
+          gh release upload "$tag" firmware-zips/Prusa-Bear-3.14.1-STOCK.zip firmware-zips/Prusa-Bear-3.14.1-EXXA_V1.zip firmware-zips/Prusa-Bear-3.14.1-EXXA_V2.zip firmware-zips/Prusa-Bear-3.14.1-source.zip firmware-zips/SHA256SUMS --clobber
+          gh release view "$tag" --json assets > /tmp/bear-release-assets.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          assets = {a["name"]: a["size"] for a in json.load(open("/tmp/bear-release-assets.json"))["assets"]}
+          expected = {p.name: p.stat().st_size for p in Path("firmware-zips").iterdir() if p.suffix == ".zip" or p.name == "SHA256SUMS"}
+          assert assets == expected, (assets, expected)
+          PY
+          gh release edit "$tag" --draft=false --prerelease --latest=false
