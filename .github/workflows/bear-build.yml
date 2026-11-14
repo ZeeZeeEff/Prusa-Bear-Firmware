@@ -4,7 +4,7 @@ on:
     branches: [bear-3.14.1]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -36,3 +36,53 @@ jobs:
           name: bear-3.14.1-firmware
           path: build-bear/*.hex
           if-no-files-found: error
+      - name: Package and publish firmware ZIPs
+        if: github.ref == 'refs/heads/bear-3.14.1'
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import subprocess
+          import zipfile
+          
+          output = Path("firmware-zips")
+          output.mkdir(exist_ok=True)
+          commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          variants = ["STOCK", "EXXA_V1", "EXXA_V2"]
+          for variant in variants:
+              prefix = "MK3S_BEAR_" + variant
+              archive_path = output / ("Prusa-Bear-3.14.1-" + variant + ".zip")
+              with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+                  for language in ["ENGLISH", "MULTILANG"]:
+                      matches = list(Path("build-bear").glob("*BEAR_" + variant + "_FW_3.14.1_" + language + ".hex"))
+                      if len(matches) != 1:
+                          raise RuntimeError(f"Expected one {variant} {language} binary, got {matches}")
+                      archive.write(matches[0], prefix + "_" + language + ".hex")
+                  archive.write("README.md", "README.md")
+                  archive.write("LICENSE", "LICENSE")
+                  archive.writestr("BUILD.json", json.dumps({
+                      "source_commit": commit,
+                      "variant": prefix,
+                      "hardware_tested": False
+                  }, indent=2) + "\n")
+              with zipfile.ZipFile(archive_path) as archive:
+                  if archive.testzip() is not None:
+                      raise RuntimeError(f"Corrupt archive {archive_path}")
+          
+          tracked = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")
+          with zipfile.ZipFile(output / "Prusa-Bear-3.14.1-source.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+              for name in tracked:
+                  if name and not name.startswith("firmware-zips/"):
+                      archive.write(name, "Prusa-Bear-Firmware/" + name)
+              archive.writestr("Prusa-Bear-Firmware/SOURCE_COMMIT.txt", commit + "\n")
+          checksums = []
+          for path in sorted(output.glob("*.zip")):
+              checksums.append(hashlib.sha256(path.read_bytes()).hexdigest() + "  " + path.name)
+          (output / "SHA256SUMS").write_text("\n".join(checksums) + "\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firmware-zips
+          git commit -m "Publish firmware ZIPs and source archive [skip ci]"
+          git push origin HEAD:bear-3.14.1
