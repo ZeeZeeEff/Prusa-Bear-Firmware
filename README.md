@@ -1,196 +1,137 @@
-# Prusa Firmware MK3
+# Prusa Bear Firmware 3.14.1
 
-This repository contains the source code and the development versions of the firmware running on the [Original Prusa i3](https://prusa3d.com/) MK3S/MK3/MK2.5S/MK2.5 line of printers.
+Three MK3S/Einsy 1.0a build variants based on Prusa firmware 3.14.1.
 
-The latest official builds can be downloaded from [Prusa Drivers](https://www.prusa3d.com/drivers/). Pre-built development releases are also [available here](https://github.com/prusa3d/Prusa-Firmware/releases).
+## Status
 
-The firmware for the Original Prusa i3 printers is proudly based on [Marlin 1.0.x](https://github.com/MarlinFirmware/Marlin/) by Scott Lahteine (@thinkyhead) et al. and is distributed under the terms of the [GNU GPL 3 license](LICENSE).
+Source changes are published on the bear-3.14.1 branch. Compilation and physical printer validation are pending.
+The local environment cannot resolve github.com. Sources were retrieved and published through the GitHub connector. The included Actions workflow provides the build environment.
+Check the workflow result before using any generated firmware.
 
-This repository contains _development material only!_
+## Compatibility
 
+| CMake variant | Hardware |
+| --- | --- |
+| MK3S_BEAR_STOCK | Standard-height Bear frame with original MK3S extruder, X axis and E3D V6 |
+| MK3S_BEAR_EXXA_V1 | Standard-height Bear frame with BearExxa V1 and E3D V6 |
+| MK3S_BEAR_EXXA_V2 | BearExxa V2 hardware 2.0.0-beta.6, Revo Micro and its specified geared motor |
 
-# Build
-## Linux
-There are two ways to build Prusa-Firmware on Linux: using [CMake](#cmake) (recommended for developers) or with [PF-build](#pf-build) which is more user-friendly for casual users.
+These configurations assume the standard MK3S electronics, bed, motors and sensors except for the listed extruder changes. Extended Z frames and other extruders require separate configuration. V2 remains experimental and specific to the beta.6 hardware.
 
-### CMake
-#### Quick-start
-The workflow should be pretty straightforward for anyone with development experience. After installing git and a recent version of python 3 all you have to do is:
+## Source provenance
 
-    # clone the repository
-    git clone https://github.com/prusa3d/Prusa-Firmware
-    cd Prusa-Firmware
+- Prusa base commit `74a577bc0e5902767b072ee85f499dc1361bf6ba`, release `v3.14.1`.
+- V1 calibration reference commit `8a174c9f6119e84403720078023c2dfb849f33cf` in soapee01/Prusa-Bear-Firmware.
+- V2 variant copied from Bear Lab release `3.14.1-BEX201B1`, file `Firmware/variants/MK3S.h`, Git blob `44afa9951b7ec3a8a80987e3cca645ef4d8c75aa` (see source link for authoritative content).
 
-    # automatically setup dependencies
-    ./utils/bootstrap.py
+[Prusa source](https://github.com/prusa3d/Prusa-Firmware/tree/74a577bc0e5902767b072ee85f499dc1361bf6ba)
+[V1 calibration patch](https://github.com/soapee01/Prusa-Bear-Firmware/commit/8a174c9f6119e84403720078023c2dfb849f33cf)
+[V2 source](https://github.com/bear-lab-3d/BearExxaV2-Prusa-Firmware/tree/3.14.1-BEX201B1)
 
-    # configure and build
-    mkdir build
-    cd build
-    cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../cmake/AvrGcc.cmake
-    ninja
+## Implementation process
 
+1. Inspect the fork and resolve the official release commit. The fork's MK3 branch includes later development commits, so create a separate branch at the exact release commit.
+2. Compare the V1 community patch against Prusa 3.14.0 and port its two geometry changes to the 3.14.1 implementation.
+3. Compare the V2 release variant against Prusa 3.14.1 and copy that hardware configuration into its own named variant.
+4. Scope runtime V1/V2 changes using variant macros.
+5. Build each variant through Prusa's existing CMake targets. Produce English and multilingual binaries separately.
+6. Inspect build reports and validate on matching physical hardware.
 
-#### Detailed CMake guide
-Building with cmake requires:
+This preparation used the GitHub connector to retrieve sources. It did not complete a local Git clone. The upstream license and history must accompany the resulting branch.
 
-- cmake >= 3.22.5
-- ninja >= 1.12.1 (optional, but recommended)
+## Modifications
 
-Python >= 3.8 is also required with the following modules:
+### Original extruder
 
-- pyelftools (package `python3-pyelftools`)
-- polib (package `python3-polib`)
-- regex (package `python3-regex`)
+`MK3S_BEAR_STOCK.h` includes upstream `MK3S.h`. This provides an explicitly named output with the original hardware settings.
 
-Additionally `gettext` is required for translators.
+### BearExxa V1
 
-Assuming a recent Debian/Ubuntu distribution, install the dependencies globally with:
+`MK3S_BEAR_EXXA_V1.h` includes upstream `MK3S.h`, sets the display name to `Bear MK3S BEX1`, and changes `Z_MAX_POS_XYZ_CALIBRATION_CORRECTION` from 9 to 2 mm.
 
-    sudo apt-get install cmake ninja python3-pyelftools python3-polib python3-regex gettext
+Prusa 3.14.1 uses that configuration constant in automatic Z calibration. The older community patch hard-coded the equivalent value in Marlin_main.cpp.
 
-Prusa-Firmware depends on a pinned version of `avr-gcc` and the external `prusa3dboards` package. These can be setup using `./utils/bootstrap.py`:
+The manual end-stop calibration in `ultralcd.cpp` uses `Z_MAX_POS - 3` for V1, replacing the standard MK3S assumption of `Z_MAX_POS + 4`. Z travel remains 210 mm. Other settings come from 3.14.1, including its 80 °C ambient limit.
 
-    # automatically setup dependencies
-    ./utils/bootstrap.py
+### BearExxa V2
 
-which will download and unpack them inside the `.dependencies` directory. `./utils/bootstrap.py` will also install `cmake`, `ninja` and the required python packages if missing, although installing those through the system's package manager is usually preferred.
+The variant imports the Bear Lab beta configuration with these substantive differences from stock MK3S.
 
-You can then proceed by creating a build directory, configure for AVR and build:
+| Setting | Stock | V2 |
+| --- | --- | --- |
+| Display name | Prusa i3 MK3S | Bear MK3S BEX2 |
+| Hotend label | E3Dv6full | E3DRevoMicro |
+| E steps/mm | 280 | 415 |
+| E microsteps | 32 | 16 |
+| Z maximum | 210 mm | 207 mm |
+| Z calibration correction | 9 mm | 3 mm |
+| Normal X/Y maximum feedrate | 200 mm/s | 300 mm/s |
+| E holding/running current register | 30 | 21 |
+| E homing current register | 18 | 15 |
+| Hotend PID P/I/D | 16.13 / 1.1625 / 56.23 | 29.37 / 5.43 / 39.71 |
+| Alternative hotend fan detection | Enabled | Disabled |
+| Fan tachometer checking | Enabled | Disabled |
+| Model-based temperature monitoring | Enabled | Disabled |
 
-    # configure
-    mkdir build
-    cd build
-    cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../cmake/AvrGcc.cmake
+The two-wire Revo Micro fan configuration uses full-speed cooling above the auto-fan temperature threshold. Traditional temperature limits and thermal-runaway checks remain configured. Disabling model-based monitoring and tachometer checks removes those diagnostic capabilities.
 
-    # build
-    ninja
+`Marlin_main.cpp` defaults crash detection to off for V2 when the EEPROM setting is first initialized. Existing EEPROM settings persist. `ultralcd.cpp` hides fan-check and extruder-info menus for V2, following the reference port.
 
-By default all variants are built. There are several ways to restrict the build for development. During configuration you can set:
+The original startup splash and numeric Prusa build version are retained. The variant display name and output filename identify the hardware. The Bear Lab release-specific build-number and repository overrides are omitted.
 
-- `cmake -DFW_VARIANTS=variant`: comma-separated list of variants to build. This is the file name as present in `Firmware/variants` without the final `.h`.
-- `cmake -DMAIN_LANGUAGES=languages`: comma-separated list of ISO language codes to include as main translations.
-- `cmake -DCOMMUNITY_LANGUAGES=languages`: comma-separated list of ISO language codes to include as community translations.
+## Build process
 
-When building the following targets are available:
+Use a Linux x86-64 environment with Git, Python 3.12, CMake, Ninja and gettext. Prusa bootstrap downloads AVR GCC 7.3.0 and prusa3dboards 1.0.6.
 
-- `ninja ALL_MULTILANG`: build all multi-language targets (default)
-- `ninja ALL_ENGLISH`: build all single-language targets
-- `ninja ALL_FIRMWARE`: build all single and multi-language targets
-- `ninja VARIANT_ENGLISH`: build the single-language version of `VARIANT`
-- `ninja VARIANT_MULTILANG`: build the multi-language version of `VARIANT`
-- `ninja check_lang`: build and check all language translations
-- `ninja check_lang_ISO`: build and check all variants with language `ISO`
-- `ninja check_lang_VARIANT`: build and check all languages for `VARIANT`
-- `ninja check_lang_VARIANT_ISO`: build and check language `ISO` for `VARIANT`
+For the initial source installation, clone the fork, fetch the release from upstream and create the branch.
 
+```bash
+git clone https://github.com/ZeeZeeEff/Prusa-Bear-Firmware.git
+cd Prusa-Bear-Firmware
+git remote add upstream https://github.com/prusa3d/Prusa-Firmware.git
+git fetch upstream tag v3.14.1
+git switch -c bear-3.14.1 74a577bc0e5902767b072ee85f499dc1361bf6ba
+```
 
-#### Automated tests
-Automated tests are built with cmake by configuring for the current host:
+Copy the prepared directory contents over that checkout, including .github. Retain the upstream LICENSE and the rest of the source tree. Review with `git diff`, then commit and push the new branch.
 
-    # clone the repository
-    git clone https://github.com/prusa3d/Prusa-Firmware
-    cd Prusa-Firmware
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install pyelftools polib regex
+python utils/bootstrap.py
+cmake -S . -B build-bear -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/AvrGcc.cmake \
+  '-DFW_VARIANTS=MK3S_BEAR_STOCK;MK3S_BEAR_EXXA_V1;MK3S_BEAR_EXXA_V2'
+cmake --build build-bear --target \
+  MK3S_BEAR_STOCK_ENGLISH MK3S_BEAR_STOCK_MULTILANG \
+  MK3S_BEAR_EXXA_V1_ENGLISH MK3S_BEAR_EXXA_V1_MULTILANG \
+  MK3S_BEAR_EXXA_V2_ENGLISH MK3S_BEAR_EXXA_V2_MULTILANG
+```
 
-    # automatically setup dependencies
-    ./utils/bootstrap.py
+Use these explicit targets. The upstream ALL_MULTILANG packaging step assumes Revo filenames outside this selected set. HEX outputs are under build-bear, with multilingual release copies in build-bear/release. Prusa's build enforces the flash region limit and runs language checks.
 
-    # configure and build
-    mkdir build
-    cd build
-    cmake .. -G Ninja
-    ninja
+The included GitHub Actions workflow runs the same six targets on pushes to bear-3.14.1 and uploads the HEX files. Fork Actions may need to be enabled in GitHub. A successful workflow confirms compilation only.
 
-    # run the tests
-    ctest
+## Installation and hardware verification
 
+Select the exact hardware variant when flashing through PrusaSlicer. Record existing calibration and EEPROM settings first.
 
-### PF-build
-PF-build is recommended for users without development experience. Download or clone the repository,
-then run PF-build and simply follow the instructions:
+For a V2 conversion, Bear Lab specifies an All Data factory reset followed by the wizard, so the motor and motion defaults are loaded. This clears stored calibration. Recalibrate Z, XYZ, first layer and PID for the actual hardware. Inspect M503 for steps, feedrates and PID. Check extrusion distance, filament sensing, heating, cooling and print behavior.
 
-    cd Prusa-Firmware
-    ./PF-build.sh
+For V2, use the Bear Lab slicer changes, including 0.4 mm starting retraction and removal of stock M907 extruder-current commands from start G-code. Tune extrusion multiplier and Linear Advance. Follow the full upstream hardware-specific procedure.
 
-PF-build currently assumes a Debian/Ubuntu (or derivative) distribution.
+[Bear Lab V2 setup and validation](https://github.com/bear-lab-3d/BearExxaV2-Prusa-Firmware/blob/3.14.1-BEX201B1/README.md)
 
+## Verification record
 
-## Windows
-### Visual Studio Code (VSCode)
-#### Prerequisites
+- Verified the release commit and source configuration through GitHub.
+- Compared V1 calibration changes with the reference commit.
+- Compared the V2 variant with the referenced release.
+- Checked that each targeted runtime replacement matches exactly once.
+- AVR compilation, language compilation, firmware size reports and physical printer tests are pending.
 
-* [Visual Studio Code](https://code.visualstudio.com/)
-* [CMake Tools plugin](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cmake-tools)
-* [Python](https://www.python.org/)
-* [Git Bash](https://git-scm.com/downloads)
+## License
 
-#### First time setup
-
-Start by cloning the Prusa-Firmware repository
-
-    git clone https://github.com/prusa3d/Prusa-Firmware
-
-Open the `Prusa-Firmware` folder in VScode.
-
-Open a new terminal in VScode (Terminal→New Terminal) and run
-
-    python .\utils\bootstrap.py
-
-This will download all dependencies required to build the firmware. You should see a `.dependencies` folder in the Prusa-Firmware folder.
-
-Reload VScode. If all works correctly you should see the VScode automatically configuring the CMake project for you. If this doesn't happen you likely need to set the CMake kit; This can be done in two ways:
-
-1. Type `Ctrl+Shift+P` and search for `CMake: Select a Kit`. Select `avr-gcc`. If none appear, Scan for kits first.
-2. If 1) does not work for some reason, as a last resort you can edit the CMake Tools settings. Search for "Additional Kits" and add `.vscode/cmake-kits.json` to the list.
-
-After updating the kit, you may need to reload VScode.
-
-#### Building
-
-To start building a firmware, click the CMake Tools plugin icon on the far left side. You will get a very large list of targets to build. Find the firmware you'd like to build (like `MK3S_ENGLISH`) and select the small icon which shows "Build" when hovered over.
-
-The built .hex file can then be found in folder `Prusa-Firmware/build`
-
-
-## Arduino IDE (deprecated)
-
-Using Arduino IDE is still possible, but _no longer supported_. Prusa-Firmware requires a complex multi-step build process that cannot be done automatically with just the IDE. For a long time we provided instructions to use Arduino in combination with shell scripts, however starting with 3.13 the build system has been completely switched to `cmake`.
-
-Building with Arduino IDE results in a *limited* firmware:
-
-- Arduino IDE can only build a single, english-only variant at a time that you manually have to select
-- The build will not be reproducible (meaning you will likely get a different binary every time you build the same sources)
-- You need to download, patch and select the correct board definitions by hand
-
-For these reasons, you should think twice before reporting issues for a firmware built with Arduino. If you find a bug in the firmware, building and testing using CMake should be your first thought. Issues regarding Arduino builds are answered by the community and are not officially supported.
-
-
-### Environment preparation
-
-Install "Arduino Software IDE" from the official website https://www.arduino.cc -> Software -> Downloads. Version 1.8.19 or higher is required.
-
-Setup Arduino to install and use the Prusa board definitions:
-
-- Open Arduino and navigate to File -> Preferences -> Settings
-- To the text field "Additional Boards Manager URLs" add `https://raw.githubusercontent.com/prusa3d/Arduino_Boards/master/IDE_Board_Manager/package_prusa3d_index.json`
-- Open Board manager (Tools -> Board -> Board manager)
-- Install "Prusa Research AVR Boards by Prusa Research"
-
-
-### Source code preparation
-
-Clone or download this repository to your local drive.
-
-In the subdirectory `Firmware/variants/` select the configuration file (.h) corresponding to your printer model and manually copy it to `Firmware/Configuration_prusa.h`
-
-Run "Arduino IDE", then
-
-- Open the file `Firmware/Firmware.ino`
-- Select the target board with Tools -> Board -> "PrusaResearch Einsy RAMBo"
-- Open `Firmware/config.h` and change `LANG_MODE` to 0.
-
-
-### Compilation and upload
-
-- Run the compilation: Sketch -> Verify/Compile
-- Upload the result code into the connected printer: Sketch -> Upload
+GNU GPL v3 under the existing LICENSE. Credit remains with Prusa Research, the Marlin contributors, Bear Lab and the referenced community contributors.

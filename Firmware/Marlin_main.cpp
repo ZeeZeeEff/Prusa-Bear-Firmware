@@ -1269,7 +1269,11 @@ void setup()
 	if (silentMode == 0xff) silentMode = 0;
 	tmc2130_mode = TMC2130_MODE_NORMAL;
 
+#ifdef BEAR_EXXA_V2
+  tmc2130_sg_stop_on_crash = eeprom_init_default_byte((uint8_t*)EEPROM_CRASH_DET, false);
+#else
   tmc2130_sg_stop_on_crash = eeprom_init_default_byte((uint8_t*)EEPROM_CRASH_DET, farm_mode ? false : true);
+#endif
 
 	if (tmc2130_sg_stop_on_crash) {
     puts_P(_N("CrashDetect ENABLED!"));

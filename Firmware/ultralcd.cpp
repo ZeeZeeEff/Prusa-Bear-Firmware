@@ -1707,7 +1707,9 @@ static void lcd_support_menu()
 
   MENU_ITEM_BACK_P(STR_SEPARATOR);
   MENU_ITEM_SUBMENU_P(_T(MSG_XYZ_DETAILS), lcd_menu_xyz_y_min);
+#ifndef BEAR_EXXA_V2
   MENU_ITEM_SUBMENU_P(_T(MSG_INFO_EXTRUDER), lcd_menu_extruder_info);
+#endif
   MENU_ITEM_SUBMENU_P(_T(MSG_INFO_SENSORS), lcd_menu_show_sensors_state);
 
 #ifdef TMC2130
@@ -2873,12 +2875,16 @@ bool lcd_calibrate_z_end_stop_manual(bool only_z)
 calibrated:
     // Let the machine think the Z axis is a bit higher than it is, so it will not home into the bed
     // during the search for the induction points.
+#ifdef BEAR_EXXA_V1
+    current_position[Z_AXIS] = Z_MAX_POS - 3.f;
+#else
 	if ((PRINTER_TYPE == PRINTER_MK25) || (PRINTER_TYPE == PRINTER_MK2) || (PRINTER_TYPE == PRINTER_MK2_SNMM)) {
 		current_position[Z_AXIS] = Z_MAX_POS-3.f;
 	}
 	else {
 		current_position[Z_AXIS] = Z_MAX_POS+4.f;
 	}
+#endif
     plan_set_position_curposXYZE();
     return true;
 
@@ -4200,7 +4206,9 @@ static void menuitems_temperature_common() {
 }
 
 void SETTINGS_FANS_CHECK() {
+#ifndef BEAR_EXXA_V2
     MENU_ITEM_TOGGLE_P(_T(MSG_FANS_CHECK), fans_check_enabled ? _T(MSG_ON) : _T(MSG_OFF), lcd_set_fan_check);
+#endif
 }
 
 #define SETTINGS_SOUND \

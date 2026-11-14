@@ -1,0 +1,8 @@
+#include "MK3S.h"
+
+// BearExxa V1 geometry, ported from soapee01 8a174c9.
+#define BEAR_EXXA_V1
+#undef CUSTOM_MENDEL_NAME
+#define CUSTOM_MENDEL_NAME "Bear MK3S BEX1"
+#undef Z_MAX_POS_XYZ_CALIBRATION_CORRECTION
+#define Z_MAX_POS_XYZ_CALIBRATION_CORRECTION 2

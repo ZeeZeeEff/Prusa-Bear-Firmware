@@ -1,0 +1,38 @@
+name: Build Bear 3.14.1
+on:
+  push:
+    branches: [bear-3.14.1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install pyelftools polib regex
+          python utils/bootstrap.py
+      - name: Configure
+        run: |
+          cmake -S . -B build-bear -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/AvrGcc.cmake \
+            '-DFW_VARIANTS=MK3S_BEAR_STOCK;MK3S_BEAR_EXXA_V1;MK3S_BEAR_EXXA_V2'
+      - name: Compile all three variants
+        run: |
+          cmake --build build-bear --parallel 2 --target \
+            MK3S_BEAR_STOCK_ENGLISH MK3S_BEAR_STOCK_MULTILANG \
+            MK3S_BEAR_EXXA_V1_ENGLISH MK3S_BEAR_EXXA_V1_MULTILANG \
+            MK3S_BEAR_EXXA_V2_ENGLISH MK3S_BEAR_EXXA_V2_MULTILANG
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bear-3.14.1-firmware
+          path: build-bear/*.hex
+          if-no-files-found: error
